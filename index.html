@@ -2732,33 +2732,23 @@ function switchNoteTab(tab) {
 }
 
 function initCanvasAndRestore(savedData, tbH) {
-  tbH = 60;
-
-  const cv = document.getElementById('noteCanvas');
-  if (!cv) { console.error('noteCanvas not found'); return; }
-
   const W = window.innerWidth;
-  const H = window.innerHeight - tbH;
+  const H = window.innerHeight - 60;
 
-  console.log('initCanvas:', W, H, 'overlay:', document.getElementById('canvasOverlay').style.display);
+  // Clone to clear old listeners, then set size on the NEW element
+  const oldCv = document.getElementById('noteCanvas');
+  if (!oldCv) return;
+  const parent = oldCv.parentNode;
+  const fresh = document.createElement('canvas');
+  fresh.id = 'noteCanvas';
+  fresh.width = W;
+  fresh.height = H;
+  fresh.style.cssText = 'position:absolute;top:0;left:0;z-index:1;cursor:crosshair;touch-action:none;-webkit-user-select:none;user-select:none;width:'+W+'px;height:'+H+'px';
+  parent.replaceChild(fresh, oldCv);
 
-  // Set canvas pixel size
-  cv.width  = W;
-  cv.height = H;
+  console.log('Canvas ready:', fresh.width, fresh.height);
 
-  // Set CSS size
-  cv.style.width  = W + 'px';
-  cv.style.height = H + 'px';
-  cv.style.position = 'absolute';
-  cv.style.top = '0';
-  cv.style.left = '0';
-  cv.style.zIndex = '1';
-  cv.style.cursor = 'crosshair';
-  cv.style.touchAction = 'none';
-
-  console.log('canvas after set:', cv.width, cv.height);
-
-  const ctx = cv.getContext('2d');
+  const ctx = fresh.getContext('2d');
   ctx.fillStyle = '#161820';
   ctx.fillRect(0, 0, W, H);
 
@@ -2766,24 +2756,6 @@ function initCanvasAndRestore(savedData, tbH) {
     const img = new Image();
     img.onload = () => ctx.drawImage(img, 0, 0, W, H);
     img.src = savedData;
-  }
-
-  // Remove old listeners by replacing with clone
-  const fresh = cv.cloneNode(false);
-  cv.parentNode.replaceChild(fresh, cv);
-
-  // Copy properties to fresh canvas
-  fresh.width = W;
-  fresh.height = H;
-  fresh.style.cssText = cv.style.cssText;
-
-  const ctx2 = fresh.getContext('2d');
-  ctx2.fillStyle = '#161820';
-  ctx2.fillRect(0, 0, W, H);
-  if (savedData) {
-    const img2 = new Image();
-    img2.onload = () => ctx2.drawImage(img2, 0, 0, W, H);
-    img2.src = savedData;
   }
 
   fresh.addEventListener('mousedown',  startDraw, { passive: false });
