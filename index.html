@@ -1282,10 +1282,17 @@ body {
 </div>
 
 <!-- CANVAS OVERLAY - Infinite scroll canvas -->
-<div id="canvasOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:600;background:#0d0e12;flex-direction:column">
+<div id="canvasOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:600;background:#0d0e12">
+
+  <!-- Top bar with back + save -->
+  <div style="position:absolute;top:0;left:0;right:0;height:50px;background:rgba(13,14,18,0.98);border-bottom:1px solid #2c3050;display:flex;align-items:center;justify-content:space-between;padding:0 12px;z-index:4">
+    <button class="btn btn-s btn-xs" onclick="switchNoteTab('text')">← กลับ</button>
+    <div style="font-size:12px;color:#7e85a8;font-family:'JetBrains Mono',monospace">✏️ เขียน/วาด</div>
+    <button class="btn btn-p btn-xs" onclick="saveNote()">💾 บันทึก</button>
+  </div>
 
   <!-- Toolbar bottom -->
-  <div id="drawToolbar" style="position:absolute;bottom:0;left:0;right:0;height:60px;background:rgba(13,14,18,0.97);border-top:1px solid #2c3050;display:flex;align-items:center;gap:8px;padding:0 12px;overflow-x:auto;z-index:3">
+  <div id="drawToolbar" style="position:absolute;bottom:0;left:0;right:0;height:60px;background:rgba(13,14,18,0.98);border-top:1px solid #2c3050;display:flex;align-items:center;gap:8px;padding:0 12px;overflow-x:auto;z-index:4">
     <div class="dtool active" id="dtPen" onclick="setTool('pen')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
     </div>
@@ -1310,8 +1317,8 @@ body {
   </div>
 
   <!-- Scroll container -->
-  <div id="canvasScroll" style="position:absolute;top:0;left:0;right:0;bottom:60px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch">
-    <canvas id="noteCanvas" style="display:block;cursor:crosshair;touch-action:pan-y;-webkit-user-select:none;user-select:none"></canvas>
+  <div id="canvasScroll" style="position:absolute;top:50px;left:0;right:0;bottom:60px;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch">
+    <canvas id="noteCanvas" style="display:block;touch-action:none;-webkit-user-select:none;user-select:none;cursor:crosshair"></canvas>
   </div>
 
 </div>
@@ -2746,8 +2753,8 @@ const CV_EXPAND_PX = 800; // expand by this much when near bottom
 
 function initCanvasAndRestore(savedData, tbH) {
   const W = window.innerWidth;
-  const visH = CV_PAGE_H();
-  const initH = visH * 3; // start with 3 screens tall
+  const visH = window.innerHeight - 50 - 60; // topbar(50) + toolbar(60)
+  const initH = visH * 3;
 
   const oldCv = document.getElementById('noteCanvas');
   if (!oldCv) return;
@@ -2755,27 +2762,22 @@ function initCanvasAndRestore(savedData, tbH) {
   const fresh = document.createElement('canvas');
   fresh.id = 'noteCanvas';
   fresh.width = W;
-  fresh.height = savedData ? Math.max(initH, 1000) : initH;
-  fresh.style.cssText = `display:block;width:${W}px;height:${fresh.height}px;cursor:crosshair;touch-action:pan-y;-webkit-user-select:none;user-select:none`;
+  fresh.height = initH;
+  fresh.style.cssText = `display:block;width:${W}px;height:${initH}px;touch-action:none;-webkit-user-select:none;user-select:none;cursor:crosshair`;
   parent.replaceChild(fresh, oldCv);
 
   console.log('Canvas ready:', fresh.width, fresh.height);
 
   const ctx = fresh.getContext('2d');
   ctx.fillStyle = '#161820';
-  ctx.fillRect(0, 0, fresh.width, fresh.height);
-
-  // Draw page divider lines
+  ctx.fillRect(0, 0, W, initH);
   cvDrawPageLines(fresh);
 
   if (savedData) {
     const src = Array.isArray(savedData) ? savedData[0] : savedData;
     if (src) {
       const img = new Image();
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, fresh.width, fresh.height);
-        cvDrawPageLines(fresh);
-      };
+      img.onload = () => { ctx.drawImage(img, 0, 0, W, fresh.height); cvDrawPageLines(fresh); };
       img.src = src;
     }
   }
@@ -2783,13 +2785,13 @@ function initCanvasAndRestore(savedData, tbH) {
   // Auto-expand when scrolled near bottom
   const scroller = document.getElementById('canvasScroll');
   if (scroller) {
-    scroller.onscroll = () => {
+    scroller.removeEventListener('scroll', scroller._scrollH);
+    scroller._scrollH = () => {
       const cv = document.getElementById('noteCanvas');
       if (!cv) return;
-      const distFromBottom = cv.height - scroller.scrollTop - scroller.clientHeight;
-      if (distFromBottom < 300) cvExpandCanvas();
+      if (cv.height - scroller.scrollTop - scroller.clientHeight < 400) cvExpandCanvas();
     };
-    // Scroll to top
+    scroller.addEventListener('scroll', scroller._scrollH);
     scroller.scrollTop = 0;
   }
 
@@ -2907,10 +2909,11 @@ function initCanvas() {
 function resizeCanvas() { initCanvas(); }
 
 function getDrawPos(e, cv) {
-  const rect = cv.getBoundingClientRect();
   const scroller = document.getElementById('canvasScroll');
   const scrollY = scroller ? scroller.scrollTop : 0;
   const src = e.touches ? e.touches[0] : e;
+  // Get position relative to canvas (which starts at top of scroller)
+  const rect = cv.getBoundingClientRect();
   const x = src.clientX - rect.left;
   const y = src.clientY - rect.top + scrollY;
   return { x, y };
