@@ -1281,9 +1281,11 @@ body {
   <div class="modal"><div class="m-handle"></div><div id="issueDContent"></div></div>
 </div>
 
-<!-- CANVAS OVERLAY - inside body, high z-index -->
-<div id="canvasOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:600;background:#161820">
-  <div id="drawToolbar" style="position:absolute;bottom:0;left:0;right:0;height:60px;background:rgba(15,17,23,0.97);border-top:1px solid #2c3050;display:flex;align-items:center;gap:8px;padding:0 12px;overflow-x:auto;z-index:2">
+<!-- CANVAS OVERLAY - Infinite scroll canvas -->
+<div id="canvasOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:600;background:#0d0e12;flex-direction:column">
+
+  <!-- Toolbar bottom -->
+  <div id="drawToolbar" style="position:absolute;bottom:0;left:0;right:0;height:60px;background:rgba(13,14,18,0.97);border-top:1px solid #2c3050;display:flex;align-items:center;gap:8px;padding:0 12px;overflow-x:auto;z-index:3">
     <div class="dtool active" id="dtPen" onclick="setTool('pen')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
     </div>
@@ -1306,7 +1308,12 @@ body {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
     </div>
   </div>
-  <canvas id="noteCanvas" style="position:absolute;top:0;left:0;z-index:1;cursor:crosshair;touch-action:none;-webkit-user-select:none;user-select:none"></canvas>
+
+  <!-- Scroll container -->
+  <div id="canvasScroll" style="position:absolute;top:0;left:0;right:0;bottom:60px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch">
+    <canvas id="noteCanvas" style="display:block;cursor:crosshair;touch-action:pan-y;-webkit-user-select:none;user-select:none"></canvas>
+  </div>
+
 </div>
 <div class="lightbox" id="lb" onclick="closeLb()">
   <button class="lb-close">✕</button>
@@ -2731,31 +2738,59 @@ function switchNoteTab(tab) {
   if (tab === 'attach') renderAttachList();
 }
 
+// ═══════════════════════════════════════════════════
+// INFINITE SCROLL CANVAS SYSTEM
+// ═══════════════════════════════════════════════════
+const CV_PAGE_H = () => window.innerHeight - 60; // visible height per "page"
+const CV_EXPAND_PX = 800; // expand by this much when near bottom
+
 function initCanvasAndRestore(savedData, tbH) {
   const W = window.innerWidth;
-  const H = window.innerHeight - 60;
+  const visH = CV_PAGE_H();
+  const initH = visH * 3; // start with 3 screens tall
 
-  // Clone to clear old listeners, then set size on the NEW element
   const oldCv = document.getElementById('noteCanvas');
   if (!oldCv) return;
   const parent = oldCv.parentNode;
   const fresh = document.createElement('canvas');
   fresh.id = 'noteCanvas';
   fresh.width = W;
-  fresh.height = H;
-  fresh.style.cssText = 'position:absolute;top:0;left:0;z-index:1;cursor:crosshair;touch-action:none;-webkit-user-select:none;user-select:none;width:'+W+'px;height:'+H+'px';
+  fresh.height = savedData ? Math.max(initH, 1000) : initH;
+  fresh.style.cssText = `display:block;width:${W}px;height:${fresh.height}px;cursor:crosshair;touch-action:pan-y;-webkit-user-select:none;user-select:none`;
   parent.replaceChild(fresh, oldCv);
 
   console.log('Canvas ready:', fresh.width, fresh.height);
 
   const ctx = fresh.getContext('2d');
   ctx.fillStyle = '#161820';
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(0, 0, fresh.width, fresh.height);
+
+  // Draw page divider lines
+  cvDrawPageLines(fresh);
 
   if (savedData) {
-    const img = new Image();
-    img.onload = () => ctx.drawImage(img, 0, 0, W, H);
-    img.src = savedData;
+    const src = Array.isArray(savedData) ? savedData[0] : savedData;
+    if (src) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, fresh.width, fresh.height);
+        cvDrawPageLines(fresh);
+      };
+      img.src = src;
+    }
+  }
+
+  // Auto-expand when scrolled near bottom
+  const scroller = document.getElementById('canvasScroll');
+  if (scroller) {
+    scroller.onscroll = () => {
+      const cv = document.getElementById('noteCanvas');
+      if (!cv) return;
+      const distFromBottom = cv.height - scroller.scrollTop - scroller.clientHeight;
+      if (distFromBottom < 300) cvExpandCanvas();
+    };
+    // Scroll to top
+    scroller.scrollTop = 0;
   }
 
   fresh.addEventListener('mousedown',  startDraw, { passive: false });
@@ -2773,12 +2808,47 @@ function initCanvasAndRestore(savedData, tbH) {
   }
 }
 
+function cvDrawPageLines(cv) {
+  const ctx = cv.getContext('2d');
+  const pageH = CV_PAGE_H();
+  ctx.save();
+  ctx.strokeStyle = 'rgba(44,48,80,0.6)';
+  ctx.setLineDash([6, 8]);
+  ctx.lineWidth = 1;
+  for (let y = pageH; y < cv.height; y += pageH) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(cv.width, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function cvExpandCanvas() {
+  const cv = document.getElementById('noteCanvas');
+  if (!cv) return;
+  const saved = cv.toDataURL();
+  const oldH = cv.height;
+  const newH = oldH + CV_EXPAND_PX;
+  cv.height = newH;
+  cv.style.height = newH + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#161820';
+  ctx.fillRect(0, 0, cv.width, newH);
+  const img = new Image();
+  img.onload = () => {
+    ctx.drawImage(img, 0, 0);
+    cvDrawPageLines(cv);
+  };
+  img.src = saved;
+}
+
 
 function saveNote() {
   if (!noteCurrentDate) return;
+  const cv = document.getElementById('noteCanvas');
   const canvasData = (() => {
     try {
-      const cv = document.getElementById('noteCanvas');
       if (!cv || cv.width < 10) return null;
       const d = cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;
       return Array.from(d).some((v,i) => i%4===3 && v>0) ? cv.toDataURL('image/png',0.85) : null;
@@ -2838,10 +2908,12 @@ function resizeCanvas() { initCanvas(); }
 
 function getDrawPos(e, cv) {
   const rect = cv.getBoundingClientRect();
-  const scaleX = cv.width / rect.width;
-  const scaleY = cv.height / rect.height;
+  const scroller = document.getElementById('canvasScroll');
+  const scrollY = scroller ? scroller.scrollTop : 0;
   const src = e.touches ? e.touches[0] : e;
-  return { x: (src.clientX - rect.left)*scaleX, y: (src.clientY - rect.top)*scaleY };
+  const x = src.clientX - rect.left;
+  const y = src.clientY - rect.top + scrollY;
+  return { x, y };
 }
 function startDraw(e) {
   e.preventDefault();
