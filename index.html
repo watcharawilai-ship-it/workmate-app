@@ -2732,24 +2732,31 @@ function switchNoteTab(tab) {
 }
 
 function initCanvasAndRestore(savedData, tbH) {
-  tbH = 60; // fixed toolbar height
+  tbH = 60;
 
-  const oldCv = document.getElementById('noteCanvas');
-  if (!oldCv) { console.error('canvas not found'); return; }
-
-  const newCv = document.createElement('canvas');
-  newCv.id = 'noteCanvas';
-  oldCv.parentNode.replaceChild(newCv, oldCv);
-  const cv = newCv;
+  const cv = document.getElementById('noteCanvas');
+  if (!cv) { console.error('noteCanvas not found'); return; }
 
   const W = window.innerWidth;
   const H = window.innerHeight - tbH;
 
+  console.log('initCanvas:', W, H, 'overlay:', document.getElementById('canvasOverlay').style.display);
+
+  // Set canvas pixel size
   cv.width  = W;
   cv.height = H;
-  cv.style.cssText = `position:absolute;top:0;left:0;width:${W}px;height:${H}px;cursor:crosshair;touch-action:none;-webkit-user-select:none;user-select:none;z-index:1`;
 
-  console.log('Canvas init:', W, H); // debug
+  // Set CSS size
+  cv.style.width  = W + 'px';
+  cv.style.height = H + 'px';
+  cv.style.position = 'absolute';
+  cv.style.top = '0';
+  cv.style.left = '0';
+  cv.style.zIndex = '1';
+  cv.style.cursor = 'crosshair';
+  cv.style.touchAction = 'none';
+
+  console.log('canvas after set:', cv.width, cv.height);
 
   const ctx = cv.getContext('2d');
   ctx.fillStyle = '#161820';
@@ -2761,13 +2768,31 @@ function initCanvasAndRestore(savedData, tbH) {
     img.src = savedData;
   }
 
-  cv.addEventListener('mousedown',  startDraw, { passive: false });
-  cv.addEventListener('mousemove',  moveDraw,  { passive: false });
-  cv.addEventListener('mouseup',    endDraw);
-  cv.addEventListener('mouseleave', endDraw);
-  cv.addEventListener('touchstart', startDraw, { passive: false });
-  cv.addEventListener('touchmove',  moveDraw,  { passive: false });
-  cv.addEventListener('touchend',   endDraw);
+  // Remove old listeners by replacing with clone
+  const fresh = cv.cloneNode(false);
+  cv.parentNode.replaceChild(fresh, cv);
+
+  // Copy properties to fresh canvas
+  fresh.width = W;
+  fresh.height = H;
+  fresh.style.cssText = cv.style.cssText;
+
+  const ctx2 = fresh.getContext('2d');
+  ctx2.fillStyle = '#161820';
+  ctx2.fillRect(0, 0, W, H);
+  if (savedData) {
+    const img2 = new Image();
+    img2.onload = () => ctx2.drawImage(img2, 0, 0, W, H);
+    img2.src = savedData;
+  }
+
+  fresh.addEventListener('mousedown',  startDraw, { passive: false });
+  fresh.addEventListener('mousemove',  moveDraw,  { passive: false });
+  fresh.addEventListener('mouseup',    endDraw);
+  fresh.addEventListener('mouseleave', endDraw);
+  fresh.addEventListener('touchstart', startDraw, { passive: false });
+  fresh.addEventListener('touchmove',  moveDraw,  { passive: false });
+  fresh.addEventListener('touchend',   endDraw);
 
   const bs = document.getElementById('brushSize');
   if (bs && !bs._bs) {
