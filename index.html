@@ -2773,32 +2773,6 @@ function initCanvasAndRestore(savedData, tbH) {
   }
 }
 
-function initCanvasAndRestore(savedData) {
-  const cv = document.getElementById('noteCanvas');
-  const toolbar = cv ? cv.nextElementSibling : null;
-  if (!cv || !toolbar) return;
-
-  const W = window.innerWidth;
-  const tbH = toolbar.offsetHeight || 60;
-  const H = window.innerHeight - tbH;
-
-  cv.width  = W;
-  cv.height = H;
-  cv.style.width  = W + 'px';
-  cv.style.height = H + 'px';
-
-  const ctx = cv.getContext('2d');
-  ctx.fillStyle = '#161820';
-  ctx.fillRect(0, 0, W, H);
-
-  if (savedData) {
-    const img = new Image();
-    img.onload = () => ctx.drawImage(img, 0, 0, W, H);
-    img.src = savedData;
-  }
-
-  bindCanvasEvents();
-}
 
 function saveNote() {
   if (!noteCurrentDate) return;
@@ -3086,4 +3060,3 @@ init();
 </script>
 </body>
 </html>
-
