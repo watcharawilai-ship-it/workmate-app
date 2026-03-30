@@ -1284,10 +1284,15 @@ body {
 <!-- CANVAS OVERLAY - Infinite scroll canvas -->
 <div id="canvasOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:600;background:#0d0e12">
 
-  <!-- Top bar with back + save -->
+  <!-- Top bar with back + page indicator + save -->
   <div style="position:absolute;top:0;left:0;right:0;background:rgba(13,14,18,0.98);border-bottom:1px solid #2c3050;display:flex;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top,0px) + 10px) 12px 10px;z-index:4;min-height:50px">
     <button class="btn btn-s btn-xs" onclick="switchNoteTab('text')">← กลับ</button>
-    <div style="font-size:12px;color:#7e85a8;font-family:'JetBrains Mono',monospace">✏️ เขียน/วาด</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button onclick="cvPrevPage()" style="background:#1d2030;border:1px solid #2c3050;color:#e6e9f8;border-radius:7px;width:28px;height:28px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">‹</button>
+      <div style="font-size:12px;color:#7e85a8;font-family:'JetBrains Mono',monospace;min-width:50px;text-align:center">หน้า <span id="cvPageNum">1</span>/<span id="cvPageTotal">1</span></div>
+      <button onclick="cvNextPage()" style="background:#1d2030;border:1px solid #2c3050;color:#e6e9f8;border-radius:7px;width:28px;height:28px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">›</button>
+      <button onclick="cvAddPage()" style="background:#4f6fff;border:none;color:#fff;border-radius:7px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer">+ หน้า</button>
+    </div>
     <button class="btn btn-p btn-xs" onclick="saveNote()">💾 บันทึก</button>
   </div>
 
@@ -2746,54 +2751,84 @@ function switchNoteTab(tab) {
 }
 
 // ═══════════════════════════════════════════════════
-// INFINITE SCROLL CANVAS SYSTEM
+// MULTI-PAGE CANVAS SYSTEM
 // ═══════════════════════════════════════════════════
-const CV_PAGE_H = () => window.innerHeight - 60; // visible height per "page"
-const CV_EXPAND_PX = 800; // expand by this much when near bottom
+let cvPages   = [null];
+let cvPageIdx = 0;
+
+function cvUpdateIndicator() {
+  const n = document.getElementById('cvPageNum');
+  const t = document.getElementById('cvPageTotal');
+  if (n) n.textContent = cvPageIdx + 1;
+  if (t) t.textContent = cvPages.length;
+}
+
+function cvSaveCurrent() {
+  const cv = document.getElementById('noteCanvas');
+  if (!cv || cv.width < 10) return;
+  cvPages[cvPageIdx] = cv.toDataURL('image/png', 0.85);
+}
+
+function cvRenderPage(idx) {
+  const cv = document.getElementById('noteCanvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#161820';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  const data = cvPages[idx];
+  if (data) {
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    img.src = data;
+  }
+  drawHistory = [];
+  cvPageIdx = idx;
+  cvUpdateIndicator();
+}
+
+function cvAddPage() {
+  cvSaveCurrent();
+  cvPages.push(null);
+  cvRenderPage(cvPages.length - 1);
+  showBanner('📄 เพิ่มหน้าใหม่แล้ว หน้า ' + cvPages.length, 'ok');
+}
+
+function cvNextPage() {
+  if (cvPageIdx >= cvPages.length - 1) return;
+  cvSaveCurrent();
+  cvRenderPage(cvPageIdx + 1);
+}
+
+function cvPrevPage() {
+  if (cvPageIdx <= 0) return;
+  cvSaveCurrent();
+  cvRenderPage(cvPageIdx - 1);
+}
 
 function initCanvasAndRestore(savedData, tbH) {
   const W = window.innerWidth;
-  const visH = window.innerHeight - 50 - 60; // topbar(50) + toolbar(60)
-  const initH = visH * 3;
+  const H = window.innerHeight - 110;
 
   const oldCv = document.getElementById('noteCanvas');
   if (!oldCv) return;
   const parent = oldCv.parentNode;
   const fresh = document.createElement('canvas');
-  fresh.id = 'noteCanvas';
-  fresh.width = W;
-  fresh.height = initH;
-  fresh.style.cssText = `display:block;width:${W}px;height:${initH}px;touch-action:none;-webkit-user-select:none;user-select:none;cursor:crosshair`;
+  fresh.id     = 'noteCanvas';
+  fresh.width  = W;
+  fresh.height = H;
+  fresh.style.cssText = `display:block;width:${W}px;height:${H}px;touch-action:none;-webkit-user-select:none;user-select:none;cursor:crosshair`;
   parent.replaceChild(fresh, oldCv);
 
   console.log('Canvas ready:', fresh.width, fresh.height);
 
-  const ctx = fresh.getContext('2d');
-  ctx.fillStyle = '#161820';
-  ctx.fillRect(0, 0, W, initH);
-  cvDrawPageLines(fresh);
-
+  // Init pages from saved data
   if (savedData) {
-    const src = Array.isArray(savedData) ? savedData[0] : savedData;
-    if (src) {
-      const img = new Image();
-      img.onload = () => { ctx.drawImage(img, 0, 0, W, fresh.height); cvDrawPageLines(fresh); };
-      img.src = src;
-    }
+    cvPages = Array.isArray(savedData) ? (savedData.length ? [...savedData] : [null]) : [savedData];
+  } else {
+    cvPages = [null];
   }
-
-  // Auto-expand when scrolled near bottom
-  const scroller = document.getElementById('canvasScroll');
-  if (scroller) {
-    scroller.removeEventListener('scroll', scroller._scrollH);
-    scroller._scrollH = () => {
-      const cv = document.getElementById('noteCanvas');
-      if (!cv) return;
-      if (cv.height - scroller.scrollTop - scroller.clientHeight < 400) cvExpandCanvas();
-    };
-    scroller.addEventListener('scroll', scroller._scrollH);
-    scroller.scrollTop = 0;
-  }
+  cvPageIdx = 0;
+  cvRenderPage(0);
 
   fresh.addEventListener('mousedown',  startDraw, { passive: false });
   fresh.addEventListener('mousemove',  moveDraw,  { passive: false });
@@ -2810,52 +2845,12 @@ function initCanvasAndRestore(savedData, tbH) {
   }
 }
 
-function cvDrawPageLines(cv) {
-  const ctx = cv.getContext('2d');
-  const pageH = CV_PAGE_H();
-  ctx.save();
-  ctx.strokeStyle = 'rgba(44,48,80,0.6)';
-  ctx.setLineDash([6, 8]);
-  ctx.lineWidth = 1;
-  for (let y = pageH; y < cv.height; y += pageH) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(cv.width, y);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function cvExpandCanvas() {
-  const cv = document.getElementById('noteCanvas');
-  if (!cv) return;
-  const saved = cv.toDataURL();
-  const oldH = cv.height;
-  const newH = oldH + CV_EXPAND_PX;
-  cv.height = newH;
-  cv.style.height = newH + 'px';
-  const ctx = cv.getContext('2d');
-  ctx.fillStyle = '#161820';
-  ctx.fillRect(0, 0, cv.width, newH);
-  const img = new Image();
-  img.onload = () => {
-    ctx.drawImage(img, 0, 0);
-    cvDrawPageLines(cv);
-  };
-  img.src = saved;
-}
-
 
 function saveNote() {
   if (!noteCurrentDate) return;
-  const cv = document.getElementById('noteCanvas');
-  const canvasData = (() => {
-    try {
-      if (!cv || cv.width < 10) return null;
-      const d = cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;
-      return Array.from(d).some((v,i) => i%4===3 && v>0) ? cv.toDataURL('image/png',0.85) : null;
-    } catch(e) { return null; }
-  })();
+  // Save current page first
+  cvSaveCurrent();
+  const canvasData = cvPages.some(p => p) ? [...cvPages] : null;
   if (!S.notes) S.notes = {};
   const noteObj = {
     text: document.getElementById('noteTextArea').value,
