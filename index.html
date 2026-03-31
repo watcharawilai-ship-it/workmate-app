@@ -1433,24 +1433,24 @@ function save() { saveLocal(); }   // local always updated instantly
 async function fbSaveTask(taskObj) {
   S.tasks = S.tasks.filter(t => t.id !== taskObj.id);
   S.tasks.push(taskObj);
-  saveLocal();
+  saveLocal(); // บันทึก localStorage ทันที
   await fbSave(COL.tasks, taskObj.id, taskObj);
 }
 async function deleteTask(id) {
   S.tasks = S.tasks.filter(t => t.id !== id);
-  saveLocal();
+  saveLocal(); // บันทึก localStorage ทันที
   await fbDelete(COL.tasks, id);
   closeM('mTaskD'); renderDash(); renderTasks(); renderCal(); updateDots();
 }
 async function saveIssueObj(issObj) {
   S.issues = S.issues.filter(i => i.id !== issObj.id);
   S.issues.push(issObj);
-  saveLocal();
+  saveLocal(); // บันทึก localStorage ทันที
   await fbSave(COL.issues, issObj.id, issObj);
 }
 async function deleteIssue(id) {
   S.issues = S.issues.filter(i => i.id !== id);
-  saveLocal();
+  saveLocal(); // บันทึก localStorage ทันที
   await fbDelete(COL.issues, id);
   closeM('mIssueD'); renderDash(); renderIssues(); updateDots();
   showBanner('🗑️ ลบบันทึกปัญหาแล้ว');
@@ -1458,19 +1458,19 @@ async function deleteIssue(id) {
 async function saveAnalysisObj(aObj) {
   S.analyses = S.analyses.filter(a => a.id !== aObj.id);
   S.analyses.push(aObj);
-  saveLocal();
+  saveLocal(); // บันทึก localStorage ทันที
   await fbSave(COL.analyses, aObj.id, aObj);
 }
 async function deleteAnalysis(id) {
   S.analyses = S.analyses.filter(a => a.id !== id);
-  saveLocal();
+  saveLocal(); // บันทึก localStorage ทันที
   await fbDelete(COL.analyses, id);
   closeM('mAnalysisDetail'); renderAnalysisList();
   showBanner('🗑️ ลบการวิเคราะห์แล้ว');
 }
 async function saveNoteObj(date, content) {
   S.notes[date] = content;
-  saveLocal();
+  saveLocal(); // บันทึก localStorage ทันที
   if (FB_READY) await fbSave(COL.notes, date, { date, content });
 }
 
@@ -3200,6 +3200,25 @@ document.getElementById('installBtn').addEventListener('click', async () => {
 });
 window.addEventListener('appinstalled', () => {
   document.getElementById('installBar').classList.remove('show');
+});
+
+// ═══════════════════════════════════════════════════
+// SAVE ON EXIT — บันทึกทันทีเมื่อออกจากแอป
+// ═══════════════════════════════════════════════════
+function emergencySave() {
+  // Save note if open
+  if (noteCurrentDate) {
+    try { autoSaveNote(); } catch(e) {}
+  }
+  // Save all state to localStorage immediately
+  saveLocal();
+}
+
+// กด Back บนมือถือ / เปลี่ยน tab / ปิดแอป
+window.addEventListener('pagehide',        emergencySave);
+window.addEventListener('beforeunload',    emergencySave);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') emergencySave();
 });
 
 // ═══════════════════════════════════════════════════
