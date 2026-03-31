@@ -1156,12 +1156,29 @@ body {
     </div>
     <div class="frow">
       <div class="fg">
-        <label class="fl">วันที่</label>
+        <label class="fl">📅 วันที่เริ่ม</label>
         <input type="date" class="fi" id="tDate">
       </div>
       <div class="fg">
-        <label class="fl">กำหนดเวลา</label>
+        <label class="fl">🏁 วันที่เสร็จ</label>
+        <input type="date" class="fi" id="tDueDate">
+      </div>
+    </div>
+    <div class="frow">
+      <div class="fg">
+        <label class="fl">⏰ กำหนดเวลา</label>
         <input type="time" class="fi" id="tTime">
+      </div>
+      <div class="fg">
+        <label class="fl">แจ้งเตือนก่อน</label>
+        <select class="fs" id="tRemind">
+          <option value="0">ไม่แจ้งเตือน</option>
+          <option value="10">10 นาที</option>
+          <option value="15" selected>15 นาที</option>
+          <option value="30">30 นาที</option>
+          <option value="60">1 ชั่วโมง</option>
+          <option value="120">2 ชั่วโมง</option>
+        </select>
       </div>
     </div>
     <div class="frow">
@@ -1190,17 +1207,6 @@ body {
           <option value="todo">รอดำเนินการ</option>
           <option value="doing">กำลังทำ</option>
           <option value="done">เสร็จแล้ว</option>
-        </select>
-      </div>
-      <div class="fg">
-        <label class="fl">แจ้งเตือนก่อน</label>
-        <select class="fs" id="tRemind">
-          <option value="0">ไม่แจ้งเตือน</option>
-          <option value="10">10 นาที</option>
-          <option value="15" selected>15 นาที</option>
-          <option value="30">30 นาที</option>
-          <option value="60">1 ชั่วโมง</option>
-          <option value="120">2 ชั่วโมง</option>
         </select>
       </div>
     </div>
@@ -1286,7 +1292,7 @@ body {
 
   <!-- Top bar with back + page indicator + save -->
   <div style="position:absolute;top:0;left:0;right:0;background:rgba(13,14,18,0.98);border-bottom:1px solid #2c3050;display:flex;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top,0px) + 10px) 12px 10px;z-index:4;min-height:50px;gap:6px">
-    <button class="btn btn-s btn-xs" onclick="switchNoteTab('text')">← กลับ</button>
+    <button class="btn btn-s btn-xs" onclick="autoSaveNote();switchNoteTab('text')">← กลับ</button>
     <div style="display:flex;align-items:center;gap:6px;flex:1;justify-content:center">
       <button onclick="cvPrevPage()" style="background:#1d2030;border:1px solid #2c3050;color:#e6e9f8;border-radius:7px;width:28px;height:28px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">‹</button>
       <div style="font-size:12px;color:#7e85a8;font-family:'JetBrains Mono',monospace;min-width:50px;text-align:center">หน้า <span id="cvPageNum">1</span>/<span id="cvPageTotal">1</span></div>
@@ -1912,14 +1918,15 @@ function openAddTask(id) {
   document.getElementById('eTId').value = id || '';
   document.getElementById('mTaskTitle').textContent = id ? '✏️ แก้ไขงาน' : '➕ เพิ่มงานใหม่';
   const t = id ? S.tasks.find(x=>x.id===id) : null;
-  document.getElementById('tName').value    = t?.name    || '';
-  document.getElementById('tDesc').value    = t?.desc    || '';
-  document.getElementById('tDate').value    = t?.date    || S.selDate;
-  document.getElementById('tTime').value    = t?.time    || '';
-  document.getElementById('tType').value    = t?.type    || 'gen';
-  document.getElementById('tPri').value     = t?.priority|| 'm';
-  document.getElementById('tStat').value    = t?.status  || 'todo';
-  document.getElementById('tRemind').value  = t?.remind  || '15';
+  document.getElementById('tName').value    = t?.name     || '';
+  document.getElementById('tDesc').value    = t?.desc     || '';
+  document.getElementById('tDate').value    = t?.date     || today(); // auto = today
+  document.getElementById('tDueDate').value = t?.dueDate  || '';     // blank = กรอกเอง
+  document.getElementById('tTime').value    = t?.time     || '';
+  document.getElementById('tType').value    = t?.type     || 'gen';
+  document.getElementById('tPri').value     = t?.priority || 'm';
+  document.getElementById('tStat').value    = t?.status   || 'todo';
+  document.getElementById('tRemind').value  = t?.remind   || '15';
   openM('mTask');
 }
 
@@ -1932,6 +1939,7 @@ async function saveTask() {
     name,
     desc:     document.getElementById('tDesc').value.trim(),
     date:     document.getElementById('tDate').value,
+    dueDate:  document.getElementById('tDueDate').value,
     time:     document.getElementById('tTime').value,
     type:     document.getElementById('tType').value,
     priority: document.getElementById('tPri').value,
@@ -1992,7 +2000,8 @@ function openTaskDetail(id) {
     </div>
     ${t.desc ? `<div class="card card-sm" style="margin-bottom:12px;font-size:14px;color:var(--t2)">${t.desc}</div>` : ''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-      <div class="card card-sm"><div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:3px">วันที่</div><div style="font-weight:700;font-size:13px">${fmtDate(t.date)}</div></div>
+      <div class="card card-sm"><div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:3px">📅 วันที่เริ่ม</div><div style="font-weight:700;font-size:13px">${fmtDate(t.date)}</div></div>
+      ${t.dueDate ? `<div class="card card-sm"><div style="font-size:10px;font-weight:700;color:var(--ylw);margin-bottom:3px">🏁 วันที่เสร็จ</div><div style="font-weight:700;font-size:13px;color:var(--ylw)">${fmtDate(t.dueDate)}</div></div>` : ''}
       ${t.time ? `<div class="card card-sm"><div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:3px">เวลา</div><div style="font-weight:700;font-family:'JetBrains Mono',monospace">${t.time}</div></div>` : ''}
       <div class="card card-sm"><div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:3px">ประเภท</div><div><span class="jchip ${tc}">${tl}</span></div></div>
       <div class="card card-sm"><div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:3px">ความสำคัญ</div><div style="font-weight:700;color:${pcol}">${plbl}</div></div>
@@ -2724,10 +2733,43 @@ function openNoteModal(ds) {
   document.getElementById('noteModal').classList.add('open');
   switchNoteTab('text');
   renderAttachList();
+  startAutoSave(); // start auto-save timer
 }
 
 function closeNoteModal() {
+  // Auto-save before closing
+  autoSaveNote();
   document.getElementById('noteModal').classList.remove('open');
+  document.getElementById('canvasOverlay').style.display = 'none';
+  if (_autoSaveTimer) { clearInterval(_autoSaveTimer); _autoSaveTimer = null; }
+}
+
+let _autoSaveTimer = null;
+
+function autoSaveNote() {
+  if (!noteCurrentDate) return;
+  // Save canvas current page
+  cvSaveCurrent();
+  const canvasData = cvPages.some(p => p) ? [...cvPages] : null;
+  if (!S.notes) S.notes = {};
+  const noteObj = {
+    text: document.getElementById('noteTextArea')?.value || '',
+    canvasData,
+    attachments: [...tmpAttachments],
+    updatedAt: Date.now(),
+  };
+  S.notes[noteCurrentDate] = noteObj;
+  saveLocal();
+  // Sync to Firebase silently
+  if (FB_READY) fbSave(COL.notes, noteCurrentDate, { date: noteCurrentDate, content: noteObj }).catch(()=>{});
+}
+
+function startAutoSave() {
+  if (_autoSaveTimer) clearInterval(_autoSaveTimer);
+  _autoSaveTimer = setInterval(() => {
+    autoSaveNote();
+    showBanner('💾 บันทึกอัตโนมัติแล้ว', '');
+  }, 30000); // auto-save every 30 seconds
 }
 
 function switchNoteTab(tab) {
