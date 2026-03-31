@@ -1285,13 +1285,14 @@ body {
 <div id="canvasOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:600;background:#0d0e12">
 
   <!-- Top bar with back + page indicator + save -->
-  <div style="position:absolute;top:0;left:0;right:0;background:rgba(13,14,18,0.98);border-bottom:1px solid #2c3050;display:flex;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top,0px) + 10px) 12px 10px;z-index:4;min-height:50px">
+  <div style="position:absolute;top:0;left:0;right:0;background:rgba(13,14,18,0.98);border-bottom:1px solid #2c3050;display:flex;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top,0px) + 10px) 12px 10px;z-index:4;min-height:50px;gap:6px">
     <button class="btn btn-s btn-xs" onclick="switchNoteTab('text')">← กลับ</button>
-    <div style="display:flex;align-items:center;gap:8px">
+    <div style="display:flex;align-items:center;gap:6px;flex:1;justify-content:center">
       <button onclick="cvPrevPage()" style="background:#1d2030;border:1px solid #2c3050;color:#e6e9f8;border-radius:7px;width:28px;height:28px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">‹</button>
       <div style="font-size:12px;color:#7e85a8;font-family:'JetBrains Mono',monospace;min-width:50px;text-align:center">หน้า <span id="cvPageNum">1</span>/<span id="cvPageTotal">1</span></div>
       <button onclick="cvNextPage()" style="background:#1d2030;border:1px solid #2c3050;color:#e6e9f8;border-radius:7px;width:28px;height:28px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">›</button>
-      <button onclick="cvAddPage()" style="background:#4f6fff;border:none;color:#fff;border-radius:7px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer">+ หน้า</button>
+      <button onclick="cvAddPage()" style="background:#4f6fff;border:none;color:#fff;border-radius:7px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">+ หน้า</button>
+      <button onclick="cvExportPDF()" style="background:rgba(48,200,255,.15);border:1px solid rgba(48,200,255,.3);color:#30c8ff;border-radius:7px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">📄 PDF</button>
     </div>
     <button class="btn btn-p btn-xs" onclick="saveNote()">💾 บันทึก</button>
   </div>
@@ -2778,7 +2779,12 @@ function cvRenderPage(idx) {
   const data = cvPages[idx];
   if (data) {
     const img = new Image();
-    img.onload = () => ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    img.onload = () => {
+      // Draw with correct aspect ratio - fit width, align top
+      const scale = cv.width / img.width;
+      const drawH = img.height * scale;
+      ctx.drawImage(img, 0, 0, cv.width, drawH);
+    };
     img.src = data;
   }
   drawHistory = [];
@@ -2803,6 +2809,56 @@ function cvPrevPage() {
   if (cvPageIdx <= 0) return;
   cvSaveCurrent();
   cvRenderPage(cvPageIdx - 1);
+}
+
+function cvExportPDF() {
+  cvSaveCurrent(); // save current page first
+  showBanner('⏳ กำลัง Export PDF...', '');
+
+  const date = noteCurrentDate || today();
+  const d = new Date(date + 'T00:00:00');
+  const dateLabel = `${d.getDate()} ${MONTHS_TH[d.getMonth()]} ${d.getFullYear()+543}`;
+  const pages = cvPages.filter(p => p); // only pages with content
+
+  if (!pages.length) { showBanner('⚠️ ไม่มีภาพวาดให้ export', 'warn'); return; }
+
+  // Build HTML with all pages as images
+  const pagesHTML = pages.map((p, i) => `
+    <div class="page">
+      <div class="page-num">หน้า ${i+1}/${pages.length}</div>
+      <img src="${p}" style="width:100%;display:block;border-radius:8px">
+    </div>
+  `).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>📓 Note - ${dateLabel}</title>
+<style>
+  body { margin:0; padding:20px; background:#fff; font-family:'Sarabun',sans-serif; }
+  h1 { font-size:18px; color:#1a1a2e; margin-bottom:4px; }
+  .sub { font-size:13px; color:#888; margin-bottom:20px; }
+  .page { margin-bottom:30px; page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .page-num { font-size:11px; color:#aaa; margin-bottom:6px; font-family:monospace; }
+  img { max-width:100%; border:1px solid #eee; }
+  @media print { body { padding:0; } }
+</style>
+</head>
+<body>
+<h1>📓 บันทึกประจำวัน</h1>
+<div class="sub">วันที่ ${dateLabel} &nbsp;|&nbsp; WorkMate &nbsp;|&nbsp; ${pages.length} หน้า</div>
+${pagesHTML}
+<script>window.onload=()=>{window.print();}<\/script>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { showBanner('⚠️ กรุณาอนุญาต Pop-up ก่อน', 'warn'); return; }
+  w.document.write(html);
+  w.document.close();
+  showBanner('📄 เปิดหน้าต่าง Print PDF แล้ว', 'ok');
 }
 
 function initCanvasAndRestore(savedData, tbH) {
