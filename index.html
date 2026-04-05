@@ -754,6 +754,10 @@ body {
       รายการงาน
       <div class="snb-dot" id="sndTasks"></div>
     </button>
+    <button class="snb" onclick="goTo('AllTasks',this)" id="snAllTasks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      งานทั้งหมด
+    </button>
     <button class="snb" onclick="goTo('Issues',this)" id="snIssues">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       บันทึกปัญหา
@@ -969,6 +973,31 @@ body {
   </div>
 </div>
 
+<!-- ════════════════════════════════
+     SCREEN: ALL TASKS
+════════════════════════════════ -->
+<div class="screen" id="sAllTasks">
+  <div class="hdr">
+    <div class="hdr-row">
+      <div>
+        <div class="hdr-logo">ALL TASKS</div>
+        <div class="hdr-title">งานทั้งหมด</div>
+      </div>
+      <button class="btn btn-p btn-xs" onclick="S.selDate=today();goTo('Tasks',document.getElementById('nTasks'))">+ เพิ่มงาน</button>
+    </div>
+    <!-- Filter tabs -->
+    <div class="tabs" id="allTaskTabs" style="margin-top:10px">
+      <button class="tab active" onclick="filterAllTasks('all',this)">ทั้งหมด</button>
+      <button class="tab" onclick="filterAllTasks('todo',this)">รอทำ</button>
+      <button class="tab" onclick="filterAllTasks('doing',this)">กำลังทำ</button>
+      <button class="tab" onclick="filterAllTasks('done',this)">เสร็จแล้ว</button>
+    </div>
+  </div>
+  <div class="scroll-area">
+    <div id="allTaskList"></div>
+  </div>
+</div>
+
 <!-- ═══ BOTTOM NAV ═══ -->
 <nav class="bnav">
   <button class="nb active" onclick="goTo('Dash',this)" id="nDash">
@@ -980,6 +1009,10 @@ body {
     งาน
     <div class="nb-dot" id="ndTasks"></div>
   </button>
+  <button class="nb" onclick="goTo('AllTasks',this)" id="nAllTasks">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    งานทั้งหมด
+  </button>
   <button class="nb" onclick="goTo('Issues',this)" id="nIssues">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     ปัญหา
@@ -988,10 +1021,6 @@ body {
   <button class="nb" onclick="goTo('Analysis',this)" id="nAnalysis">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
     วิเคราะห์
-  </button>
-  <button class="nb" onclick="goTo('Export',this)" id="nExport">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-    รายงาน
   </button>
 </nav>
 </div><!-- /app -->
@@ -1540,7 +1569,7 @@ function goTo(name, btn) {
   if (name === 'Tasks')    { renderCal(); renderTasks(); }
   if (name === 'Issues')   { renderIssues(); }
   if (name === 'Analysis') { renderAnalysisList(); }
-  if (name === 'Export')   { renderExpSummary(); }
+  if (name === 'AllTasks') { renderAllTasks(); }
   updateDots();
 }
 
@@ -1953,6 +1982,77 @@ async function saveTask() {
   renderDash(); renderCal(); renderTasks(); updateDots();
   if (S.dashSelDate) showDaySummary(S.dashSelDate);
   showBanner(eid ? '✅ อัปเดทงานแล้ว' : '✅ เพิ่มงานสำเร็จ', 'ok');
+}
+
+// ═══════════════════════════════════════════════════
+// ALL TASKS VIEW
+// ═══════════════════════════════════════════════════
+let allTaskFilter = 'all';
+
+function filterAllTasks(f, btn) {
+  allTaskFilter = f;
+  document.querySelectorAll('#allTaskTabs .tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderAllTasks();
+}
+
+function renderAllTasks() {
+  let tasks = [...S.tasks];
+  if (allTaskFilter !== 'all') tasks = tasks.filter(t => t.status === allTaskFilter);
+  tasks.sort((a, b) => {
+    const dc = (b.date||'').localeCompare(a.date||'');
+    return dc !== 0 ? dc : (a.time||'').localeCompare(b.time||'');
+  });
+
+  const list = document.getElementById('allTaskList');
+  if (!tasks.length) {
+    list.innerHTML = `<div class="empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg><p>ไม่มีงาน</p></div>`;
+    return;
+  }
+
+  const groups = {};
+  tasks.forEach(t => {
+    const d = t.date || 'ไม่ระบุ';
+    if (!groups[d]) groups[d] = [];
+    groups[d].push(t);
+  });
+
+  const PRIO_COLOR = { h:'var(--red)', m:'var(--ylw)', l:'var(--grn)' };
+  const STAT_LBL   = { todo:'รอทำ', doing:'กำลังทำ', done:'เสร็จ' };
+  const STAT_CLS   = { todo:'b-todo', doing:'b-doing', done:'b-done' };
+  const td = today();
+
+  list.innerHTML = Object.entries(groups).map(([date, dtasks]) => {
+    const isToday = date === td;
+    const isPast  = date < td;
+    let dateLabel = date;
+    try {
+      const d = new Date(date + 'T00:00:00');
+      dateLabel = `${d.getDate()} ${MONTHS_TH[d.getMonth()]} ${d.getFullYear()+543}`;
+    } catch(e) {}
+
+    const tasksHtml = dtasks.map(t => {
+      const [tc, tl] = TYPE_MAP[t.type||'gen'];
+      const hasDue   = t.dueDate && t.dueDate !== t.date;
+      return `<div class="titem ${t.status==='done'?'done-fade':''}" style="border-left:3px solid ${PRIO_COLOR[t.priority||'m']};margin-bottom:8px;cursor:pointer" onclick="openTaskDetail('${t.id}')">
+        <div class="titem-title">${t.name}</div>
+        <div class="titem-meta" style="flex-wrap:wrap;gap:4px">
+          <span class="badge ${STAT_CLS[t.status]||'b-todo'}">${STAT_LBL[t.status]||'รอทำ'}</span>
+          <span class="jchip ${tc}">${tl}</span>
+          ${t.time ? `<span class="titem-time">⏰ ${t.time}</span>` : ''}
+          ${hasDue ? `<span style="font-size:11px;color:var(--ylw)">🏁 ${fmtDate(t.dueDate)}</span>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
+        <div style="font-size:13px;font-weight:700;color:${isToday?'var(--acc)':isPast?'var(--t3)':'var(--txt)'}">${isToday?'📅 วันนี้':'📅 '+dateLabel}</div>
+        <div style="font-size:11px;color:var(--t3);font-family:'JetBrains Mono',monospace">${dtasks.length} งาน</div>
+      </div>
+      ${tasksHtml}
+    </div>`;
+  }).join('');
 }
 
 function renderTasks() {
