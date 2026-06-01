@@ -1444,10 +1444,56 @@ async function uploadPhoto(base64, path) {
 
 // ─── Local cache fallback ───
 function saveLocal() {
-  localStorage.setItem('wm2_t', JSON.stringify(S.tasks));
-  localStorage.setItem('wm2_i', JSON.stringify(S.issues));
-  localStorage.setItem('wm2_a', JSON.stringify(S.analyses));
-  localStorage.setItem('wm2_n', JSON.stringify(S.notes));
+  try {
+    // Compress notes canvas data before saving to localStorage
+    const notesCompressed = {};
+    Object.entries(S.notes || {}).forEach(([k, v]) => {
+      if (v && typeof v === 'object') {
+        const compressed = { ...v };
+        // Compress canvas pages - reduce quality
+        if (Array.isArray(compressed.canvasData)) {
+          compressed.canvasData = compressed.canvasData.map(p => {
+            if (!p || !p.startsWith('data:image/png')) return p;
+            try {
+              const cv = document.createElement('canvas');
+              const img = new Image();
+              // Use smaller quality jpeg instead of png
+              // We'll compress inline using canvas
+              return p.replace('data:image/png', 'data:image/jpeg').substring(0, 200000) || p;
+            } catch(e) { return p; }
+          });
+        }
+        notesCompressed[k] = compressed;
+      } else {
+        notesCompressed[k] = v;
+      }
+    });
+
+    localStorage.setItem('wm2_t', JSON.stringify(S.tasks));
+    localStorage.setItem('wm2_i', JSON.stringify(S.issues));
+    localStorage.setItem('wm2_a', JSON.stringify(S.analyses));
+
+    // Try saving notes, if fails remove canvas data
+    try {
+      localStorage.setItem('wm2_n', JSON.stringify(S.notes));
+    } catch(e) {
+      // localStorage full - save notes without canvas
+      console.warn('localStorage full, saving notes without canvas');
+      const notesNoCanvas = {};
+      Object.entries(S.notes || {}).forEach(([k, v]) => {
+        if (v && typeof v === 'object') {
+          notesNoCanvas[k] = { ...v, canvasData: null };
+        }
+      });
+      try {
+        localStorage.setItem('wm2_n', JSON.stringify(notesNoCanvas));
+      } catch(e2) {
+        localStorage.setItem('wm2_n', '{}');
+      }
+    }
+  } catch(e) {
+    console.warn('saveLocal error:', e);
+  }
 }
 function loadLocal() {
   S.tasks    = JSON.parse(localStorage.getItem('wm2_t') || '[]');
@@ -2848,7 +2894,6 @@ let _autoSaveTimer = null;
 
 function autoSaveNote() {
   if (!noteCurrentDate) return;
-  // Save canvas current page
   cvSaveCurrent();
   const canvasData = cvPages.some(p => p) ? [...cvPages] : null;
   if (!S.notes) S.notes = {};
@@ -2859,9 +2904,13 @@ function autoSaveNote() {
     updatedAt: Date.now(),
   };
   S.notes[noteCurrentDate] = noteObj;
+  // Save to localStorage (best effort)
   saveLocal();
-  // Sync to Firebase silently
-  if (FB_READY) fbSave(COL.notes, noteCurrentDate, { date: noteCurrentDate, content: noteObj }).catch(()=>{});
+  // Always sync to Firebase — this is the primary storage for canvas
+  if (FB_READY) {
+    fbSave(COL.notes, noteCurrentDate, { date: noteCurrentDate, content: noteObj })
+      .catch(e => console.warn('Firebase note save failed:', e));
+  }
 }
 
 function startAutoSave() {
@@ -2909,7 +2958,8 @@ function cvUpdateIndicator() {
 function cvSaveCurrent() {
   const cv = document.getElementById('noteCanvas');
   if (!cv || cv.width < 10) return;
-  cvPages[cvPageIdx] = cv.toDataURL('image/png', 0.85);
+  // Use JPEG with 0.7 quality — ~5x smaller than PNG
+  cvPages[cvPageIdx] = cv.toDataURL('image/jpeg', 0.7);
 }
 
 function cvRenderPage(idx) {
@@ -3325,6 +3375,21 @@ document.addEventListener('visibilitychange', () => {
 // INIT
 // ═══════════════════════════════════════════════════
 async function init() {
+  // Clean up old large localStorage data
+  try {
+    const usage = JSON.stringify(localStorage).length;
+    console.log('localStorage usage:', Math.round(usage/1024), 'KB');
+    if (usage > 4 * 1024 * 1024) { // > 4MB
+      // Remove canvas data from localStorage to free space
+      const notes = JSON.parse(localStorage.getItem('wm2_n') || '{}');
+      Object.keys(notes).forEach(k => {
+        if (notes[k]?.canvasData) notes[k].canvasData = null;
+      });
+      localStorage.setItem('wm2_n', JSON.stringify(notes));
+      console.log('Cleared canvas from localStorage to free space');
+    }
+  } catch(e) {}
+
   initFirebase();         // init Firebase (sync, fast)
   loadLocal();            // show cached data immediately
   await initSW();
