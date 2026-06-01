@@ -2917,8 +2917,7 @@ function startAutoSave() {
   if (_autoSaveTimer) clearInterval(_autoSaveTimer);
   _autoSaveTimer = setInterval(() => {
     autoSaveNote();
-    showBanner('💾 บันทึกอัตโนมัติแล้ว', '');
-  }, 30000); // auto-save every 30 seconds
+  }, 10000); // auto-save every 10 seconds
 }
 
 function switchNoteTab(tab) {
@@ -3195,7 +3194,15 @@ function moveDraw(e) {
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   lastX = pos.x; lastY = pos.y;
 }
-function endDraw() { isDrawing = false; }
+function endDraw() {
+  if (!isDrawing) return;
+  isDrawing = false;
+  // บันทึกทันทีหลังวาดเสร็จแต่ละเส้น
+  clearTimeout(endDraw._t);
+  endDraw._t = setTimeout(() => {
+    autoSaveNote();
+  }, 500); // รอ 0.5 วินาทีหลังวาดเสร็จแล้วค่อยบันทึก
+}
 
 function setTool(t) {
   drawTool = t;
